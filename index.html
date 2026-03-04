@@ -17,30 +17,99 @@
 
 <body>
     <div id="game-container">
+        <div id="menu-bg-animation"></div> <!-- Container para fundo animado -->
         <div id="ui-overlay">
             <h1 id="game-title">WILD CROSSING</h1>
 
             <div id="hud">
-                <div id="score-container">DISTÂNCIA: <span id="dist-val">0m</span></div>
-                <div id="animal-stats">
-                    <span id="animal-name">---</span>
+                <div id="stats-left">
+                    <div id="score-container">DISTÂNCIA: <span id="dist-val">0m</span></div>
+                    <div id="level-container">NÍVEL: <span id="level-val">1</span></div>
+                    <div id="coin-hud">MOEDAS: <span id="coin-val">0</span> 🪙</div>
+                    <div id="animal-stats">
+                        <span id="animal-name">---</span>
+                    </div>
+                </div>
+                <div id="health-container">
+                    <div class="heart">❤️</div>
+                    <div class="heart">❤️</div>
+                    <div class="heart">❤️</div>
                 </div>
             </div>
 
             <div id="main-menu">
-                <p>O TRÂNSITO É IMPLACÁVEL</p>
-                <div id="animal-preview" class="glass">
-                    <div id="preview-sprite"></div>
-                    <h3 id="preview-name">ESCOLHENDO ANIMAL...</h3>
-                    <p id="preview-desc"></p>
+                <p>ESCOLHA SEU SOBREVIVENTE</p>
+                <div id="animal-selection">
+                    <button id="prev-animal" class="nav-btn">◂</button>
+                    <div id="animal-preview" class="glass">
+                        <div id="preview-sprite"></div>
+                        <h3 id="preview-name">ESCOLHENDO...</h3>
+                        <div id="preview-stats">
+                            <div class="stat-row">Vida: <div class="stat-container">
+                                    <div id="stat-life" class="stat-fill"></div>
+                                </div>
+                            </div>
+                            <div class="stat-row">Velocidade: <div class="stat-container">
+                                    <div id="stat-speed" class="stat-fill"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <p id="preview-desc"></p>
+                    </div>
+                    <button id="next-animal" class="nav-btn">▸</button>
                 </div>
-                <button id="start-btn">INICIAR TRAVESSIA</button>
+                <div class="menu-buttons">
+                    <button id="start-btn">MODO INFINITO</button>
+                    <button id="levels-btn">MODO FASES</button>
+                    <button id="shop-btn" class="glass">LOJA DE ANIMAIS 🛒</button>
+                </div>
+            </div>
+
+            <div id="shop-menu" class="hidden">
+                <div class="shop-content glass">
+                    <button id="back-from-shop" class="close-btn">×</button>
+                    <h2>LOJA SELVAGEM</h2>
+                    <p>Suas Moedas: <span id="shop-coins">0</span> 🪙</p>
+                    <div id="shop-grid">
+                        <!-- Itens da loja serão injetados aqui -->
+                    </div>
+                </div>
+            </div>
+
+            <div id="level-selector" class="hidden">
+                <div class="selector-content glass">
+                    <button id="back-to-menu" class="close-btn">×</button>
+                    <h2>SELECIONE A FASE</h2>
+                    <div id="levels-grid">
+                        <!-- Levels will be injected here -->
+                    </div>
+                </div>
+            </div>
+
+            <div id="level-success" class="hidden">
+                <div class="success-content glass">
+                    <h2 id="success-message">FASE CONCLUÍDA!</h2>
+                    <div id="star-rating">
+                        <span class="star">⭐</span>
+                        <span class="star">⭐</span>
+                        <span class="star">⭐</span>
+                    </div>
+                    <p id="level-rewards">Ganhos: +<span id="reward-coins">0</span> 🪙</p>
+                    <p>Vida Restante: <span id="remaining-lives">3</span>/3</p>
+                    <div class="success-buttons">
+                        <button id="next-level-btn">PRÓXIMA FASE</button>
+                        <button id="selector-btn">VOLTAR AO MENU</button>
+                    </div>
+                </div>
             </div>
 
             <div id="game-over" class="hidden">
                 <h2>ATROPELADO!</h2>
                 <p>Você percorreu: <span id="final-score">0</span> metros</p>
-                <button id="restart-btn">TENTAR NOVAMENTE</button>
+                <div class="menu-buttons">
+                    <button id="restart-btn">TENTAR NOVAMENTE</button>
+                    <button id="menu-btn-over">VOLTAR AO MENU</button>
+                </div>
             </div>
         </div>
         <canvas id="gameCanvas"></canvas>

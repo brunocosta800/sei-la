@@ -1,6 +1,7 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const distElement = document.getElementById('dist-val');
+const levelElement = document.getElementById('level-val'); // Added for level tracking
 const animalNameElement = document.getElementById('animal-name');
 
 const previewSprite = document.getElementById('preview-sprite');
@@ -10,7 +11,31 @@ const mainMenu = document.getElementById('main-menu');
 const gameOverMenu = document.getElementById('game-over');
 const startBtn = document.getElementById('start-btn');
 const restartBtn = document.getElementById('restart-btn');
+const menuBtnOver = document.getElementById('menu-btn-over');
 const finalScoreElement = document.getElementById('final-score');
+const menuBg = document.getElementById('menu-bg-animation');
+const hud = document.getElementById('hud');
+const prevAnimalBtn = document.getElementById('prev-animal');
+const nextAnimalBtn = document.getElementById('next-animal');
+const statLifeFill = document.getElementById('stat-life');
+const statSpeedFill = document.getElementById('stat-speed');
+const levelsBtn = document.getElementById('levels-btn');
+const levelSelector = document.getElementById('level-selector');
+const levelsGrid = document.getElementById('levels-grid');
+const backToMenuBtn = document.getElementById('back-to-menu');
+const levelSuccessMenu = document.getElementById('level-success');
+const nextLevelBtn = document.getElementById('next-level-btn');
+const selectorBtn = document.getElementById('selector-btn');
+const starsContainer = document.getElementById('star-rating');
+const remainingLivesElement = document.getElementById('remaining-lives');
+const healthHearts = document.querySelectorAll('.heart');
+const shopBtn = document.getElementById('shop-btn');
+const shopMenu = document.getElementById('shop-menu');
+const backFromShopBtn = document.getElementById('back-from-shop');
+const shopGrid = document.getElementById('shop-grid');
+const coinVal = document.getElementById('coin-val');
+const shopCoins = document.getElementById('shop-coins');
+const rewardCoins = document.getElementById('reward-coins');
 
 let gameWidth, gameHeight;
 let gameActive = false;
@@ -19,15 +44,82 @@ let level = 1;
 let globalSpeedMultiplier = 1;
 let lastTime = 0;
 let cameraY = 0;
+let maxDist = 0;
+let requestID = null; // To manage the animation frame loop
+let gameMode = 'infinite'; // 'infinite' or 'levels'
+let currentLevel = 1;
+let lives = 3;
+let MAX_LIVES = 3;
+let selectedAnimalIndex = 0;
+
+const LEVELS = [
+    { goal: 200, multiplier: 1.0, title: "Primeiros Passos" },
+    { goal: 400, multiplier: 1.1, title: "Rua Movimentada" },
+    { goal: 600, multiplier: 1.2, title: "Travessia Selvagem" },
+    { goal: 800, multiplier: 1.3, title: "Hora do Rush" },
+    { goal: 1000, multiplier: 1.4, title: "Mestre da Pista" },
+    { goal: 1200, multiplier: 1.55, title: "Rodovia Letal" },
+    { goal: 1500, multiplier: 1.7, title: "Expresso Bioma" },
+    { goal: 1800, multiplier: 1.85, title: "Tráfego Caótico" },
+    { goal: 2100, multiplier: 2.0, title: "Desafio Extremo" },
+    { goal: 2500, multiplier: 2.2, title: "Rei da Floresta" },
+    { goal: 3000, multiplier: 2.5, title: "Inalcançável" },
+    { goal: 4000, multiplier: 3.0, title: "Lenda Urbana" }
+];
+
+const ANIMALS = [
+    { name: 'Capivara', sprite: '🦫', speed: 5, size: 0.85, maxLives: 3, color: '#D2B48C', desc: 'Equilibrada e resiliente.', price: 0 },
+    { name: 'Tartaruga', sprite: '🐢', speed: 1.5, size: 0.75, maxLives: 5, color: '#90EE90', desc: 'O tanque clássico.', price: 0 },
+    { name: 'Coelho', sprite: '🐇', speed: 15, size: 0.5, maxLives: 2, color: '#E0E0E0', desc: 'Saltador veloz.', price: 0 },
+    // Loja Animais
+    { name: 'Gato', sprite: '🐈', speed: 10, size: 0.6, maxLives: 3, color: '#FFD700', desc: 'Ágil e preciso.', price: 200 },
+    { name: 'Esquilo', sprite: '🐿️', speed: 20, size: 0.5, maxLives: 1, color: '#CD853F', desc: 'Flash da natureza.', price: 400 },
+    { name: 'Panda', sprite: '🐼', speed: 4, size: 1.0, maxLives: 6, color: '#FFFFFF', desc: 'Resistência extrema.', price: 800 },
+    { name: 'Leão', sprite: '🦁', speed: 8, size: 0.9, maxLives: 4, color: '#F4A460', desc: 'Rei da pista.', price: 1500 },
+    { name: 'Pinguim', sprite: '🐧', speed: 12, size: 0.6, maxLives: 2, color: '#000000', desc: 'Desliza no asfalto.', price: 600 },
+    { name: 'Dinossauro', sprite: '🦖', speed: 6, size: 1.2, maxLives: 8, color: '#228B22', desc: 'Extinto? Jamais.', price: 5000 }
+];
+
+// Persistent Progress
+let progress = JSON.parse(localStorage.getItem('wildCrossingProgress')) || {
+    completedLevels: {}, // levelIndex: stars
+    coins: 0,
+    unlockedAnimals: ['Capivara', 'Tartaruga', 'Coelho']
+};
+
+// Migração/Garantia de atributos para progressos antigos
+if (typeof progress.coins !== 'number') progress.coins = 0;
+if (!Array.isArray(progress.unlockedAnimals)) progress.unlockedAnimals = ['Capivara', 'Tartaruga', 'Coelho'];
+
+// Garante que o trio inicial SEMPRE esteja desbloqueado
+const starters = ['Capivara', 'Tartaruga', 'Coelho'];
+starters.forEach(animal => {
+    if (!progress.unlockedAnimals.includes(animal)) progress.unlockedAnimals.push(animal);
+});
+
+// Limpeza de bugs críticos: Se o usuário só tem o Dinossauro ou o Gato (erros de versões anteriores)
+if (progress.unlockedAnimals.length < 3 || (progress.unlockedAnimals.includes('Dinossauro') && progress.coins < 1000)) {
+    // Reset preventivo para garantir o trio inicial
+    progress.unlockedAnimals = ['Capivara', 'Tartaruga', 'Coelho'];
+}
+
+// Garante que o animal selecionado seja um que ele possui
+if (progress.unlockedAnimals.length === 0) progress.unlockedAnimals = ['Capivara', 'Tartaruga', 'Coelho'];
+const firstUnlocked = progress.unlockedAnimals[0];
+const animalExists = ANIMALS.find(a => a.name === firstUnlocked);
+if (!animalExists) {
+    progress.unlockedAnimals = ['Capivara', 'Tartaruga', 'Coelho'];
+}
+
+if (!progress.completedLevels) progress.completedLevels = {};
+saveProgress();
+
+function saveProgress() {
+    localStorage.setItem('wildCrossingProgress', JSON.stringify(progress));
+}
 
 const GRID_SIZE = 60;
 const ROWS = [];
-const ANIMALS = [
-    { name: 'Capivara', sprite: '🦫', speed: 4, size: 0.9, color: '#D2B48C', desc: 'Resistente e calma. Ideal para iniciantes.' },
-    { name: 'Gato', sprite: '🐈', speed: 8, size: 0.6, color: '#FFD700', desc: 'Rápido e furtivo. Esquiva fácil.' },
-    { name: 'Tartaruga', sprite: '🐢', speed: 2, size: 0.7, color: '#90EE90', desc: 'Lenta, mas focada. Para mestres do timing.' },
-    { name: 'Esquilo', sprite: '🐿️', speed: 10, size: 0.5, color: '#CD853F', desc: 'O terror das estradas. Pura velocidade.' }
-];
 
 let player = {
     x: 0,
@@ -35,6 +127,7 @@ let player = {
     targetX: 0,
     targetY: 0,
     visualY: 0, // For smooth camera follow
+    lastMoveTime: 0, // Novo: Controle de recarga
     type: ANIMALS[0]
 };
 
@@ -162,28 +255,51 @@ class Vehicle {
     }
 }
 
+function canSpawnVehicle(lane) {
+    // Evita sobreposição: checa se o último veículo já se afastou o suficiente da borda de spawn
+    if (lane.vehicles.length === 0) return true;
+    const lastV = lane.vehicles[lane.vehicles.length - 1];
+    const minGap = 150; // Espaço mínimo entre veículos em pixels
+
+    if (lane.speed > 0) {
+        return lastV.x > -lastV.length + minGap;
+    } else {
+        return lastV.x < gameWidth - minGap;
+    }
+}
+
 class Lane {
     constructor(y, type) {
         this.y = y;
         this.type = type;
         this.vehicles = [];
 
-        // Ajustes de velocidade e spawn por ambiente
-        let baseSpeed = 1.2 + (level * 0.3);
-        let spawnChance = 1.0;
+        // Ajustes de escala de dificuldade
+        const difficulty = (gameMode === 'levels') ? currentLevel : level;
+
+        // Fator de escala: Nível 1 é muito fácil, escala gradualmente
+        const scaleFactor = Math.max(0.2, (difficulty - 1) * 0.4 + 0.5);
+
+        let baseSpeed = 0.8 + (scaleFactor * 0.4);
         let vType = 'car';
 
         if (type === 'river') {
-            baseSpeed *= 0.6; // Rios mais tranquilos no início
-            this.spawnInterval = Math.max(2500, 5000 / (1 + level * 0.2));
+            baseSpeed *= 0.6;
+            this.spawnInterval = Math.max(2000, 6000 / scaleFactor);
             vType = 'boat';
         } else if (type === 'rail') {
-            baseSpeed *= 2.2;
-            this.spawnInterval = Math.max(5000, 10000 / (1 + level * 0.5));
+            baseSpeed *= 2.0;
+            this.spawnInterval = Math.max(4000, 12000 / scaleFactor);
             vType = 'train';
         } else { // road
-            // Nível 1 começa com tráfego bem mais espaçado
-            this.spawnInterval = Math.max(1800, (Math.random() * 2500 + 2500) / (1 + level * 0.3));
+            // Gaps muito maiores no nível 1
+            this.spawnInterval = Math.max(1500, (Math.random() * 2000 + 3000) / scaleFactor);
+        }
+
+        // Garante que o nível 1 seja realmente amigável
+        if (difficulty === 1 && type === 'road') {
+            this.spawnInterval *= 1.5;
+            baseSpeed *= 0.8;
         }
 
         this.speed = (Math.random() * 1.5 + baseSpeed) * (Math.random() > 0.5 ? 1 : -1);
@@ -201,8 +317,10 @@ class Lane {
                 v.x = this.speed > 0 ? currentX - v.length : gameWidth - currentX;
                 this.vehicles.push(v);
 
-                // GARANTIA DE ESPAÇO: Aumentada para 3.5x no nível 1 para facilitar
-                const minGap = GRID_SIZE * (vType === 'train' ? 12 : 3.5);
+                // GARANTIA DE ESPAÇO: Escala com a dificuldade
+                const difficulty = (gameMode === 'levels') ? currentLevel : level;
+                const gapScale = Math.max(2.0, 5.0 - (difficulty * 0.3));
+                const minGap = GRID_SIZE * (vType === 'train' ? 12 : gapScale);
                 currentX += Math.max(minGap + v.length, (this.spawnInterval / 16.6) * Math.abs(this.speed));
             }
         }
@@ -217,15 +335,22 @@ class Lane {
     getLaneColor() {
         if (this.type === 'grass') return '#064e3b';
         if (this.type === 'road') return '#1e293b';
-        if (this.type === 'river') return '#0c4a6e'; // Azul profundo
-        if (this.type === 'rail') return '#0f172a'; // Quase preto
-        if (this.type === 'checkpoint') return '#1e40af';
+        if (this.type === 'river') return '#0c4a6e';
+        if (this.type === 'rail') return '#0f172a';
+        if (this.type === 'checkpoint') return '#064e3b';
         return '#022c22';
     }
 
     draw(offsetY) {
+        ctx.save();
         ctx.fillStyle = this.color;
         ctx.fillRect(0, this.y - offsetY, gameWidth, GRID_SIZE);
+
+        if (this.type === 'road' && gameMode === 'infinite') {
+            // Adiciona uma linha sutil para garantir que não pareça um erro visual
+            ctx.strokeStyle = 'rgba(255,255,255,0.02)';
+            ctx.strokeRect(0, this.y - offsetY, gameWidth, GRID_SIZE);
+        }
 
         // Detalhes visuais dos trilhos
         if (this.type === 'rail') {
@@ -292,17 +417,20 @@ class Lane {
             ctx.font = '700 24px Outfit';
             ctx.fillStyle = 'white';
             ctx.textAlign = 'center';
-            ctx.fillText(`LEVEL ${level}`, gameWidth / 2, this.y + GRID_SIZE / 2 - offsetY + 8);
+            let label = `LEVEL ${level}`;
+            if (this.isLevelGoal) label = "LINE GOAL!";
+            ctx.fillText(label, gameWidth / 2, this.y + GRID_SIZE / 2 - offsetY + 8);
             ctx.shadowBlur = 0;
         }
 
         this.vehicles.forEach(v => v.draw(offsetY));
+        ctx.restore();
     }
 
     update(dt) {
         if (this.type !== 'grass' && this.type !== 'checkpoint') {
             this.spawnTimer += dt * 1000;
-            if (this.spawnTimer > this.spawnInterval) {
+            if (this.spawnTimer > this.spawnInterval && canSpawnVehicle(this)) {
                 const colors = this.getEnvColors();
                 let vType = 'car';
                 if (this.type === 'river') vType = 'boat';
@@ -320,15 +448,110 @@ class Lane {
     }
 }
 
+// Fundo Animado do Menu
+function createBgAnimation() {
+    if (!menuBg) return;
+    menuBg.innerHTML = '';
+    const emojiList = ['🚗', '🚕', '🚙', '🚌', '🚐', '🚛', '🚚', '🚜', '🏎️', '🏍️'];
+
+    for (let i = 0; i < 15; i++) {
+        const car = document.createElement('div');
+        car.className = 'bg-car';
+        car.innerText = emojiList[Math.floor(Math.random() * emojiList.length)];
+
+        let x = Math.random() * 100;
+        let y = Math.random() * 100;
+        let speed = 0.05 + Math.random() * 0.1;
+        let dir = Math.random() > 0.5 ? 1 : -1;
+
+        car.style.left = x + '%';
+        car.style.top = y + '%';
+
+        const interval = setInterval(() => {
+            if (menuBg.classList.contains('hidden')) {
+                clearInterval(interval);
+                return;
+            }
+            x += speed * dir;
+            if (x > 110) x = -10;
+            if (x < -10) x = 110;
+            car.style.left = x + '%';
+        }, 16);
+
+        menuBg.appendChild(car);
+    }
+}
+
+function toggleMenuVisibility(show) {
+    if (show) {
+        menuBg.classList.remove('hidden');
+        hud.classList.add('hidden');
+        gameActive = false; // Garante que o jogo pare se voltarmos pro menu
+        if (requestID) cancelAnimationFrame(requestID);
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height); // Limpa o canvas do jogo
+        createBgAnimation();
+    } else {
+        menuBg.classList.add('hidden');
+        hud.classList.remove('hidden');
+    }
+}
+
+function updateHealthUI(customHearts = null) {
+    const heartsToUpdate = customHearts || document.querySelectorAll('.heart');
+    heartsToUpdate.forEach((heart, index) => {
+        if (index < lives) {
+            heart.classList.remove('lost');
+        } else {
+            heart.classList.add('lost');
+        }
+    });
+}
+
+function renderLevelSelector() {
+    levelsGrid.innerHTML = '';
+    LEVELS.forEach((lv, index) => {
+        const levelNum = index + 1;
+        const stars = progress.completedLevels[levelNum] || 0;
+        const isLocked = levelNum > 1 && !progress.completedLevels[levelNum - 1];
+
+        const card = document.createElement('div');
+        card.className = `level-card ${isLocked ? 'locked' : ''}`;
+        card.innerHTML = `
+            <div class="level-num">${levelNum}</div>
+            <div class="level-stars">${'⭐'.repeat(stars)}${'☆'.repeat(3 - stars)}</div>
+        `;
+
+        if (!isLocked) {
+            card.onclick = () => {
+                currentLevel = levelNum;
+                startLevel(levelNum);
+            };
+        }
+        levelsGrid.appendChild(card);
+    });
+}
+
+function startLevel(levelNum) {
+    gameMode = 'levels';
+    const config = LEVELS[levelNum - 1];
+    startGame(config.multiplier, config.goal);
+}
+
 function generateInitialLanes() {
     ROWS.length = 0;
-    // Posição 0 é onde o jogador começa. Geramos algumas para baixo e muitas para cima.
-    for (let i = -5; i <= 20; i++) {
+    // Começamos do -5 (abaixo do jogador) até 10 (visão inicial)
+    for (let i = -5; i <= 10; i++) {
         const y = i * -GRID_SIZE;
-        const type = (i <= 0) ? 'grass' : 'road';
+        let type = 'grass';
+        if (i > 0) type = 'road';
+        if (i === 10) type = 'checkpoint'; // Primeiro respiro
+
         const lane = new Lane(y, type);
         ROWS.push(lane);
     }
+    // O resto é preenchido pelo fillLanes dinamicamente
+    fillLanes();
 }
 
 function fillLanes() {
@@ -338,22 +561,41 @@ function fillLanes() {
     while (minY > player.targetY - renderDistance) {
         minY -= GRID_SIZE;
         let type = 'road';
+        let isGoal = false;
         const rowId = Math.abs(Math.floor(minY / GRID_SIZE));
 
-        if (rowId % 15 === 0) {
-            type = 'checkpoint';
-        } else if (rowId % 15 > 12) {
-            type = 'grass';
+        if (gameMode === 'levels') {
+            const goalId = LEVELS[currentLevel - 1].goal / 10;
+            if (rowId > goalId) {
+                type = 'grass'; // Depois da meta, tudo é seguro
+            } else if (rowId === goalId) {
+                type = 'checkpoint';
+                isGoal = true;
+            } else if (rowId % 25 === 0) {
+                type = 'checkpoint';
+            } else {
+                const rand = Math.random();
+                if (rand < 0.2) type = 'rail';
+                else if (rand < 0.5) type = 'river';
+                else type = 'road';
+            }
         } else {
-            // Sorteia o ambiente perigoso
-            const rand = Math.random();
-            if (rand < 0.2) type = 'rail';      // 20% trilhos
-            else if (rand < 0.5) type = 'river'; // 30% rios
-            else type = 'road';                  // 50% estradas
+            if (rowId % 25 === 0) {
+                type = 'checkpoint';
+            } else {
+                const rand = Math.random();
+                if (rand < 0.2) type = 'rail';
+                else if (rand < 0.5) type = 'river';
+                else type = 'road';
+            }
         }
 
         const lane = new Lane(minY, type);
         if (type === 'checkpoint') lane.isLevelEnd = true;
+        if (isGoal) {
+            lane.isLevelGoal = true;
+            lane.color = '#7c3aed'; // Roxo realce para a linha de chegada
+        }
         ROWS.push(lane);
     }
 
@@ -368,18 +610,36 @@ function fillLanes() {
 }
 
 
-function selectRandomAnimal() {
-    const animal = ANIMALS[Math.floor(Math.random() * ANIMALS.length)];
+function updateAnimalPreview() {
+    const animal = ANIMALS[selectedAnimalIndex];
     player.type = animal;
     previewSprite.innerText = animal.sprite;
     previewName.innerText = animal.name;
     previewDesc.innerText = animal.desc;
     animalNameElement.innerText = animal.name;
 
+    // Update Stats Bars
+    statLifeFill.style.width = (animal.maxLives / 6 * 100) + '%';
+    statSpeedFill.style.width = (animal.speed / 10 * 100) + '%';
+}
+
+function selectRandomAnimal() {
+    // Escolhe apenas entre os desbloqueados
+    const unlocked = ANIMALS.filter(a => progress.unlockedAnimals.includes(a.name));
+    const randomAnimal = unlocked[Math.floor(Math.random() * unlocked.length)];
+    selectedAnimalIndex = ANIMALS.findIndex(a => a.name === randomAnimal.name);
+    updateAnimalPreview();
 }
 
 function movePlayer(dx, dy) {
     if (!gameActive) return;
+
+    // SISTEMA DE RECARGA (COOLDOWN) - Baseado na velocidade do animal
+    const now = Date.now();
+    const moveCooldown = Math.max(50, 420 - (player.type.speed * 20)); // Mais lento o animal, maior o intervalo
+    if (now - player.lastMoveTime < moveCooldown) return;
+
+    player.lastMoveTime = now;
 
     const newX = player.targetX + dx * GRID_SIZE;
     const newY = player.targetY + dy * GRID_SIZE;
@@ -392,16 +652,33 @@ function movePlayer(dx, dy) {
     // Always allow moving up (infinite)
     if (dy !== 0) {
         player.targetY = newY;
-        if (dy < 0) {
-            distance += 10;
+
+        // Calcular progresso baseado na linha (lógica: +10m por linha avançada)
+        const currentDist = Math.max(0, Math.round(player.targetY / -GRID_SIZE) * 10);
+
+        if (currentDist > maxDist) {
+            maxDist = currentDist;
+            distance = maxDist;
             distElement.innerText = `${distance}m`;
 
-            // Checar se passou checkpoint - Busca a linha na posição Y atual
             const currentRow = ROWS.find(r => Math.round(r.y) === Math.round(player.targetY));
-            if (currentRow && currentRow.isLevelEnd) {
+
+            // Checar Vitória em Modo Fases (Baseado na linha de chegada)
+            if (gameMode === 'levels' && currentRow && currentRow.isLevelGoal) {
+                levelComplete();
+                return;
+            }
+
+            // Checar se subiu de nível - Em Modo Fases o nível é fixo, em Infinito sobe nos checkpoints
+            if (gameMode === 'infinite' && currentRow && currentRow.isLevelEnd && !currentRow.processed) {
+                currentRow.processed = true;
                 level++;
-                globalSpeedMultiplier += 0.25; // Aumento significativo de velocidade
-                console.log("LEVEL UP! Nível atual:", level, "Velocidade:", globalSpeedMultiplier);
+                if (gameMode === 'infinite') {
+                    globalSpeedMultiplier += 0.25;
+                    addCoins(20); // Bonus por checkpoint no infinito
+                }
+                if (levelElement) levelElement.innerText = level;
+                console.log("CHECKPOINT! Nível atual:", level);
             }
         }
     }
@@ -410,6 +687,58 @@ function movePlayer(dx, dy) {
     // Melhorado: Verifica se o topo das pistas está perto da posição do jogador
     let topY = ROWS.reduce((acc, row) => Math.min(acc, row.y), 0);
     if (topY > player.targetY - 1500) fillLanes();
+}
+
+function addCoins(amount) {
+    progress.coins += amount;
+    saveProgress();
+    updateCoinDisplay();
+}
+
+function updateCoinDisplay() {
+    const coins = (progress && typeof progress.coins === 'number') ? progress.coins : 0;
+    if (coinVal) coinVal.innerText = coins;
+    if (shopCoins) shopCoins.innerText = coins;
+}
+
+function renderShop() {
+    shopGrid.innerHTML = '';
+    ANIMALS.forEach(animal => {
+        const isUnlocked = progress.unlockedAnimals.includes(animal.name);
+        const canAfford = progress.coins >= animal.price;
+
+        const item = document.createElement('div');
+        item.className = `shop-item ${isUnlocked ? 'unlocked' : ''}`;
+        item.innerHTML = `
+            <div class="shop-item-sprite">${animal.sprite}</div>
+            <div class="shop-item-name">${animal.name}</div>
+            <div class="shop-item-price">${isUnlocked ? 'DESBLOQUEADO' : animal.price + ' 🪙'}</div>
+            <button class="buy-btn ${isUnlocked ? 'owned' : ''}" 
+                ${isUnlocked ? 'disabled' : ''}>
+                ${isUnlocked ? 'ADQUIRIDO' : (canAfford ? 'COMPRAR' : 'POUCAS MOEDAS')}
+            </button>
+        `;
+
+        const btn = item.querySelector('.buy-btn');
+        if (isUnlocked) {
+            btn.classList.add('owned');
+            btn.disabled = true;
+        } else if (canAfford) {
+            btn.onclick = (e) => {
+                e.stopPropagation(); // Previne conflitos
+                progress.coins -= animal.price;
+                progress.unlockedAnimals.push(animal.name);
+                saveProgress();
+                renderShop();
+                updateCoinDisplay();
+            };
+        } else {
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+            btn.style.cursor = 'not-allowed';
+        }
+        shopGrid.appendChild(item);
+    });
 }
 
 window.addEventListener('keydown', e => {
@@ -487,9 +816,12 @@ function gameLoop(time) {
         if (player.targetX > gameWidth) endGame();
     }
 
-    // Interpolate Player
-    player.x += (player.targetX - player.x) * (player.type.speed * 0.1);
-    player.visualY += (player.targetY - player.visualY) * (player.type.speed * 0.1);
+    // Suavização do movimento (ARRASTO)
+    // Reduzi os valores base para dar mais sensação de peso/arrasto
+    const interpolationSpeed = 0.04 + (player.type.speed * 0.012);
+    player.x += (player.targetX - player.x) * interpolationSpeed;
+    player.y += (player.targetY - player.y) * interpolationSpeed;
+    player.visualY += (player.targetY - player.visualY) * 0.15;
 
     // Draw Player
     ctx.save(); // Salva o estado para não afetar outros desenhos
@@ -502,38 +834,229 @@ function gameLoop(time) {
     ctx.shadowBlur = 10;
     ctx.shadowColor = 'rgba(0,0,0,0.5)';
 
+    if (isInvincible) {
+        ctx.globalAlpha = Math.sin(Date.now() * 0.02) * 0.4 + 0.6;
+    }
+
     ctx.fillText(player.type.sprite, player.x + GRID_SIZE / 2, player.visualY + GRID_SIZE / 2 - cameraY);
+    ctx.globalAlpha = 1.0;
     ctx.restore();
 
-    if (checkCollision()) endGame();
+    if (checkCollision()) playerHit();
 
-    requestAnimationFrame(gameLoop);
+    requestID = requestAnimationFrame(gameLoop);
 }
 
-function startGame() {
+function startGame(multiplier = 1, goal = Infinity) {
     gameActive = true;
     distance = 0;
+    maxDist = 0;
     level = 1;
-    globalSpeedMultiplier = 1;
+    MAX_LIVES = player.type.maxLives;
+    lives = MAX_LIVES;
+    globalSpeedMultiplier = multiplier;
     distElement.innerText = "0m";
+    if (levelElement) levelElement.innerText = (gameMode === 'levels') ? currentLevel : 1;
+    if (gameMode === 'infinite') level = 1;
+    updateCoinDisplay();
+
+    // Re-create health HUD based on character
+    const healthContainer = document.getElementById('health-container');
+    healthContainer.innerHTML = '';
+    for (let i = 0; i < MAX_LIVES; i++) {
+        const heart = document.createElement('div');
+        heart.className = 'heart';
+        heart.innerText = '❤️';
+        healthContainer.appendChild(heart);
+    }
+    // Update the reference
+    const newHearts = document.querySelectorAll('.heart');
+
+    updateHealthUI(newHearts);
+
     mainMenu.classList.add('hidden');
     gameOverMenu.classList.add('hidden');
-    document.getElementById('game-title').classList.add('hidden'); // Esconde o título principal
+    levelSelector.classList.add('hidden');
+    levelSuccessMenu.classList.add('hidden');
+    document.getElementById('game-title').classList.add('hidden');
+    toggleMenuVisibility(false);
 
-    generateInitialLanes();
+    if (requestID) cancelAnimationFrame(requestID);
+
     resetPlayerPosition();
+    generateInitialLanes();
     lastTime = performance.now();
-    requestAnimationFrame(gameLoop);
+    requestID = requestAnimationFrame(gameLoop);
+}
+
+let isInvincible = false;
+function playerHit() {
+    if (isInvincible) return;
+
+    lives--;
+    updateHealthUI();
+
+    if (lives <= 0) {
+        endGame();
+    } else {
+        // Breve invencibilidade e feedback visual (Sem redirecionamento conforme pedido)
+        isInvincible = true;
+        setTimeout(() => { isInvincible = false; }, 1500); // 1.5s de invencibilidade
+    }
+}
+
+function levelComplete() {
+    gameActive = false;
+
+    // Estrela baseada na porcentagem de vida restante para ser justo com todos (Tank vs Speed)
+    const healthPercentage = lives / MAX_LIVES;
+    let stars = 1;
+    if (healthPercentage >= 0.8) stars = 3;
+    else if (healthPercentage >= 0.4) stars = 2;
+
+    let coinsEarned = 50; // 1 Estrela
+    if (stars === 3) coinsEarned = 300;
+    else if (stars === 2) coinsEarned = 150;
+
+    addCoins(coinsEarned);
+    rewardCoins.innerText = coinsEarned;
+
+    // Save progress
+    if (!progress.completedLevels[currentLevel] || progress.completedLevels[currentLevel] < stars) {
+        progress.completedLevels[currentLevel] = stars;
+        saveProgress();
+    }
+
+    remainingLivesElement.innerText = lives;
+    const starSpans = starsContainer.querySelectorAll('.star');
+    starSpans.forEach((s, i) => {
+        if (i < stars) s.classList.add('earned');
+        else s.classList.remove('earned');
+    });
+
+    levelSuccessMenu.classList.remove('hidden');
 }
 
 function endGame() {
     gameActive = false;
     finalScoreElement.innerText = distance;
+
+    // Mensagens de morte variadas
+    const messages = [
+        "ATROPELADO!",
+        "VIROU TAPETE!",
+        "ASSADO NA PISTA!",
+        "FOI PRO CÉU DOS BICHOS!",
+        "QUE PANCADA!",
+        "GAME OVER!",
+        "TENTE OUTRA VEZ!"
+    ];
+    document.querySelector('#game-over h2').innerText = messages[Math.floor(Math.random() * messages.length)];
+
     gameOverMenu.classList.remove('hidden');
     selectRandomAnimal();
 }
 
-resize();
-selectRandomAnimal();
-startBtn.addEventListener('click', startGame);
-restartBtn.addEventListener('click', startGame);
+function initGame() {
+    resize();
+
+    // Configura interface inicial
+    hud.classList.add('hidden');
+    mainMenu.classList.remove('hidden');
+    gameOverMenu.classList.add('hidden');
+    shopMenu.classList.add('hidden');
+    levelSelector.classList.add('hidden');
+
+    // Garante animais iniciais
+    const currentStarters = ['Capivara', 'Tartaruga', 'Coelho'];
+    if (!currentStarters.every(name => progress.unlockedAnimals.includes(name))) {
+        progress.unlockedAnimals = [...new Set([...progress.unlockedAnimals, ...currentStarters])];
+        saveProgress();
+    }
+
+    selectRandomAnimal();
+    updateCoinDisplay();
+    createBgAnimation();
+}
+
+initGame();
+
+startBtn.addEventListener('click', () => {
+    gameMode = 'infinite';
+    startGame();
+});
+
+levelsBtn.addEventListener('click', () => {
+    mainMenu.classList.add('hidden');
+    levelSelector.classList.remove('hidden');
+    renderLevelSelector();
+});
+
+backToMenuBtn.addEventListener('click', () => {
+    levelSelector.classList.add('hidden');
+    mainMenu.classList.remove('hidden');
+    toggleMenuVisibility(true);
+});
+
+restartBtn.addEventListener('click', () => {
+    if (gameMode === 'infinite') startGame();
+    else startLevel(currentLevel);
+});
+
+nextLevelBtn.addEventListener('click', () => {
+    if (currentLevel < LEVELS.length) {
+        currentLevel++;
+        startLevel(currentLevel);
+    } else {
+        levelSuccessMenu.classList.add('hidden');
+        mainMenu.classList.remove('hidden');
+        toggleMenuVisibility(true);
+    }
+});
+
+selectorBtn.addEventListener('click', () => {
+    levelSuccessMenu.classList.add('hidden');
+    levelSelector.classList.remove('hidden');
+    renderLevelSelector();
+    toggleMenuVisibility(true);
+});
+
+shopBtn.addEventListener('click', () => {
+    shopMenu.classList.remove('hidden');
+    renderShop();
+});
+
+backFromShopBtn.addEventListener('click', () => {
+    shopMenu.classList.add('hidden');
+});
+
+function getNextUnlockedAnimal(index, direction) {
+    let nextIdx = index;
+    const count = ANIMALS.length;
+    for (let i = 0; i < count; i++) {
+        nextIdx = (nextIdx + direction + count) % count;
+        if (progress.unlockedAnimals.includes(ANIMALS[nextIdx].name)) {
+            return nextIdx;
+        }
+    }
+    return index;
+}
+
+prevAnimalBtn.addEventListener('click', () => {
+    selectedAnimalIndex = getNextUnlockedAnimal(selectedAnimalIndex, -1);
+    updateAnimalPreview();
+});
+
+nextAnimalBtn.addEventListener('click', () => {
+    selectedAnimalIndex = getNextUnlockedAnimal(selectedAnimalIndex, 1);
+    updateAnimalPreview();
+});
+
+menuBtnOver.addEventListener('click', () => {
+    gameOverMenu.classList.add('hidden');
+    mainMenu.classList.remove('hidden');
+    toggleMenuVisibility(true);
+    updateAnimalPreview();
+});
+
+updateCoinDisplay();
