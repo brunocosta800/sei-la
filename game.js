@@ -869,15 +869,31 @@ function gameLoop(time) {
     let scaleY = 1.0;
     let scaleX = 1.0;
 
+    // Calcula velocidade relativa para efeitos dinâmicos
+    const velY = (player.targetY - player.visualY);
+    const isMovingForward = velY < -1.0; // Movendo para cima (frente)
+
     if (isMoving) {
         const speedFactor = player.type.speed * 0.002;
         const timeVal = Date.now() * (0.01 + speedFactor);
-        walkY = -Math.abs(Math.sin(timeVal)) * 12; // Pulo ao andar
+
+        // Pulo base ao andar
+        walkY = -Math.abs(Math.sin(timeVal)) * 12;
 
         const moveDirX = player.targetX > player.x ? 1 : (player.targetX < player.x ? -1 : 0);
-        walkRotation = Math.sin(timeVal) * 0.2 * (moveDirX !== 0 ? moveDirX : 1); // Rotação ao andar
 
-        scaleY = 1.0 + Math.sin(timeVal) * 0.1;
+        // Rotação lateral baseada no movimento horizontal
+        walkRotation = Math.sin(timeVal) * 0.2 * (moveDirX !== 0 ? moveDirX : 1);
+
+        // Inclinação extra se estiver indo para frente (tilt)
+        if (isMovingForward) {
+            walkRotation += -0.1 * player.facingDir; // Inclina para frente
+            walkY -= 8; // Leve impulso extra para cima no desenho
+            scaleY = 1.1 + Math.sin(timeVal) * 0.15; // Mais alongado ao "saltar" pra frente
+        } else {
+            scaleY = 1.0 + Math.sin(timeVal) * 0.1;
+        }
+
         scaleX = 1.0 - Math.sin(timeVal) * 0.05;
     } else {
         // Respiração suave ao ficar parado
