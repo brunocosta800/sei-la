@@ -37,7 +37,11 @@
                 </div>
             </div>
 
-            <div id="main-menu">
+            <div id="start-screen">
+                <button id="play-btn" class="menu-btn">JOGAR</button>
+            </div>
+
+            <div id="main-menu" class="hidden">
                 <p>ESCOLHA SEU SOBREVIVENTE</p>
                 <div id="animal-selection">
                     <button id="prev-animal" class="nav-btn">◂</button>
@@ -109,6 +113,15 @@
                 <div class="menu-buttons">
                     <button id="restart-btn">TENTAR NOVAMENTE</button>
                     <button id="menu-btn-over">VOLTAR AO MENU</button>
+                </div>
+            </div>
+            <div id="pause-screen" class="hidden">
+                <div class="pause-content glass">
+                    <h2>PAUSADO</h2>
+                    <div class="menu-buttons">
+                        <button id="resume-btn">CONTINUAR</button>
+                        <button id="quit-to-menu-btn">VOLTAR AO MENU</button>
+                    </div>
                 </div>
             </div>
         </div>

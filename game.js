@@ -37,6 +37,11 @@ const coinVal = document.getElementById('coin-val');
 const shopCoins = document.getElementById('shop-coins');
 const rewardCoins = document.getElementById('reward-coins');
 
+const startScreen = document.getElementById('start-screen');
+const playBtn = document.getElementById('play-btn');
+const pauseScreen = document.getElementById('pause-screen');
+const resumeBtn = document.getElementById('resume-btn');
+const quitToMenuBtn = document.getElementById('quit-to-menu-btn');
 let gameWidth, gameHeight;
 let gameActive = false;
 let distance = 0;
@@ -128,7 +133,8 @@ let player = {
     targetY: 0,
     visualY: 0, // For smooth camera follow
     lastMoveTime: 0, // Novo: Controle de recarga
-    type: ANIMALS[0]
+    type: ANIMALS[0],
+    facingDir: 1
 };
 
 function resize() {
@@ -486,6 +492,7 @@ function toggleMenuVisibility(show) {
     if (show) {
         menuBg.classList.remove('hidden');
         hud.classList.add('hidden');
+        document.getElementById('game-title').classList.remove('hidden');
         gameActive = false; // Garante que o jogo pare se voltarmos pro menu
         if (requestID) cancelAnimationFrame(requestID);
 
@@ -641,6 +648,10 @@ function movePlayer(dx, dy) {
 
     player.lastMoveTime = now;
 
+    if (dx !== 0) {
+        player.facingDir = dx > 0 ? -1 : 1;
+    }
+
     const newX = player.targetX + dx * GRID_SIZE;
     const newY = player.targetY + dy * GRID_SIZE;
 
@@ -741,7 +752,29 @@ function renderShop() {
     });
 }
 
+let isPaused = false;
+
+function togglePause() {
+    if (!gameActive) return;
+
+    isPaused = !isPaused;
+    if (isPaused) {
+        pauseScreen.classList.remove('hidden');
+        if (requestID) cancelAnimationFrame(requestID);
+    } else {
+        pauseScreen.classList.add('hidden');
+        lastTime = performance.now();
+        requestID = requestAnimationFrame(gameLoop);
+    }
+}
+
 window.addEventListener('keydown', e => {
+    if ((e.key === 'Escape' || e.key === 'p' || e.key === 'P') && gameActive) {
+        togglePause();
+    }
+
+    if (isPaused) return;
+
     if (e.key === 'ArrowUp' || e.key === 'w') movePlayer(0, -1);
     else if (e.key === 'ArrowDown' || e.key === 's') movePlayer(0, 1);
     else if (e.key === 'ArrowLeft' || e.key === 'a') movePlayer(-1, 0);
@@ -825,6 +858,33 @@ function gameLoop(time) {
 
     // Draw Player
     ctx.save(); // Salva o estado para não afetar outros desenhos
+
+    // Animação de caminhada e respiração
+    const moveDistX = Math.abs(player.targetX - player.x);
+    const moveDistY = Math.abs(player.targetY - player.visualY);
+    const isMoving = moveDistX > 0.5 || moveDistY > 0.5;
+
+    let walkY = 0;
+    let walkRotation = 0;
+    let scaleY = 1.0;
+    let scaleX = 1.0;
+
+    if (isMoving) {
+        const speedFactor = player.type.speed * 0.002;
+        const timeVal = Date.now() * (0.01 + speedFactor);
+        walkY = -Math.abs(Math.sin(timeVal)) * 12; // Pulo ao andar
+
+        const moveDirX = player.targetX > player.x ? 1 : (player.targetX < player.x ? -1 : 0);
+        walkRotation = Math.sin(timeVal) * 0.2 * (moveDirX !== 0 ? moveDirX : 1); // Rotação ao andar
+
+        scaleY = 1.0 + Math.sin(timeVal) * 0.1;
+        scaleX = 1.0 - Math.sin(timeVal) * 0.05;
+    } else {
+        // Respiração suave ao ficar parado
+        scaleY = 1.0 + Math.sin(Date.now() * 0.003) * 0.03;
+        scaleX = 1.0 - Math.sin(Date.now() * 0.003) * 0.02;
+    }
+
     ctx.font = `${GRID_SIZE * 0.8}px sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -838,7 +898,14 @@ function gameLoop(time) {
         ctx.globalAlpha = Math.sin(Date.now() * 0.02) * 0.4 + 0.6;
     }
 
-    ctx.fillText(player.type.sprite, player.x + GRID_SIZE / 2, player.visualY + GRID_SIZE / 2 - cameraY);
+    // Aplica transformações da animação
+    ctx.translate(player.x + GRID_SIZE / 2, player.visualY + GRID_SIZE / 2 - cameraY + walkY);
+    ctx.rotate(walkRotation);
+    ctx.scale(scaleX * player.facingDir, scaleY); // Multiplica scaleX pelo facingDir para espelhar o animal
+
+    // Desenha na origem traduzida
+    ctx.fillText(player.type.sprite, 0, 0);
+
     ctx.globalAlpha = 1.0;
     ctx.restore();
 
@@ -962,10 +1029,12 @@ function initGame() {
 
     // Configura interface inicial
     hud.classList.add('hidden');
-    mainMenu.classList.remove('hidden');
+    startScreen.classList.remove('hidden');
+    mainMenu.classList.add('hidden');
     gameOverMenu.classList.add('hidden');
     shopMenu.classList.add('hidden');
     levelSelector.classList.add('hidden');
+    pauseScreen.classList.add('hidden');
 
     // Garante animais iniciais
     const currentStarters = ['Capivara', 'Tartaruga', 'Coelho'];
@@ -1055,6 +1124,34 @@ nextAnimalBtn.addEventListener('click', () => {
 menuBtnOver.addEventListener('click', () => {
     gameOverMenu.classList.add('hidden');
     mainMenu.classList.remove('hidden');
+    toggleMenuVisibility(true);
+    updateAnimalPreview();
+});
+
+playBtn.addEventListener('click', () => {
+    startScreen.classList.add('hidden');
+    mainMenu.classList.remove('hidden');
+});
+
+resumeBtn.addEventListener('click', () => {
+    if (isPaused) togglePause();
+});
+
+quitToMenuBtn.addEventListener('click', () => {
+    if (isPaused) {
+        isPaused = false;
+        pauseScreen.classList.add('hidden');
+    }
+    gameActive = false;
+
+    if (requestID) {
+        cancelAnimationFrame(requestID);
+        requestID = null;
+    }
+
+
+    mainMenu.classList.remove('hidden');
+    hud.classList.add('hidden');
     toggleMenuVisibility(true);
     updateAnimalPreview();
 });
